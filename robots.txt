@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mouradkadri.github.io/sitemap.xml
