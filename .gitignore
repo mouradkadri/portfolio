@@ -1,0 +1,15 @@
+# Backup and development HTML variants
+*PRE-*.html
+*.BACKUP*.html
+*standalone*.html
+*standalone.BACKUP*.html
+HANDOFF-*.md
+images-needed.md
+club-posters.html
+
+# Local video demos — not deployed
+videos/
+
+# Local dev scratch
+3000
+debundle.js
