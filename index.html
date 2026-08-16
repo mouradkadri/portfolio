@@ -38,10 +38,17 @@
   }
   function poll(){if(!ok){go();setTimeout(poll,600);}}
   window.addEventListener('load',function(){setTimeout(poll,1200);});
-  ['mousedown','keydown','touchstart','scroll'].forEach(function(e){
-    window.addEventListener(e,go,{passive:true});
-  });
+  window.addEventListener('scroll',go,{passive:true});
 })();
+</script>
+<script>
+window.__resources={
+  "i18n":"assets/75cebc28-c95f-42cd-a3f7-511b32bb495e.js",
+  "cvML":"assets/c2bb1cec-4d59-446d-a6a3-6ff004f3aef9.pdf",
+  "cvDS":"assets/880800b7-e374-4491-80e4-0e50ac7998fb.pdf",
+  "cvFS":"assets/78d13340-d17c-4550-b72b-f75c3761bc3e.pdf",
+  "cvAuto":"assets/a4b54782-a8d4-4714-8623-586dceee24e7.pdf"
+};
 </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
