@@ -1,5 +1,5 @@
 /* =============================================================================
- * enhance.js — recruiter experience + visitor analytics
+ * enhance.js — visitor analytics + curated "best bits" highlights reel
  * Isolated, framework-agnostic. Injects body-level UI (survives app re-renders)
  * and re-applies in-flow tweaks via a MutationObserver, mirroring the site's
  * existing mk-* injection pattern. No dependency on the compiled template DSL.
@@ -20,22 +20,16 @@
     ntfyTopic:   'mk-portfolio-CHANGE-ME-pick-random',// <-- e.g. 'mk-portfolio-7f3a9c2b91'
     geoLookup:   true,                                // best-effort city/country in alerts
 
-    /* --- always-on availability signal --- */
-    availability: "Available Jun 2026 · ML / AI Engineering · Tunis · EU · Remote",
+    /* --- availability signal (date computed, never hardcoded stale) --- */
+    availableFrom: '2026-06',                         // YYYY-MM you become available
+    availabilitySuffix: 'ML / AI Engineering · Tunis · EU',
 
-    /* --- role framing (?role=ml|ds|fs|auto) --- */
+    /* --- role framing (?role=ml|ds|fs|auto) — invisible unless the param is set --- */
     roleHeadline: {
       ml:  'I build machine learning systems that <em>run in production</em>, not in notebooks.',
       ds:  'I turn messy, real-world data into <em>decisions teams trust</em>.',
       fs:  'I ship <em>full-stack products</em> with ML at the core, not bolted on.',
       auto:'I design <em>autonomous agents</em> that close the loop, no human in the seat.'
-    },
-    roleFit: {
-      ml:  'Best fit: Applied ML / ML Engineering',
-      ds:  'Best fit: Data Science / Analytics',
-      fs:  'Best fit: Full-stack / product engineering with ML',
-      auto:'Best fit: AI automation / agentic systems',
-      '':  'Fit: ML · AI · Full-stack engineering'
     },
     /* home shows these 5 cards; order them per role (by project slug) */
     roleProjects: {
@@ -46,22 +40,38 @@
     },
     roleCV: { ml: 'cvML', ds: 'cvDS', fs: 'cvFS', auto: 'cvAuto' },
 
-    /* top wins shown in the recruiter TL;DR */
-    wins: [
-      'Autonomous debt-collection voice agent at a bank — 1.05 s end-to-end, 98.1% intent F1 over 39 intents, on-prem.',
-      'Exaq OCR assistant — 97% field accuracy, cut manual data-entry time by 85% (YOLOv13 + TrOCR).',
-      '11 shipped projects: RAG systems, an MLOps pipeline, and GooseJobs (a SaaS side project).'
-    ],
-
-    /* guided tour — selectors that already exist on the home page */
-    tour: [
-      { sel: '#work',       cap: "Selected work — the systems I've actually shipped, strongest first." },
-      { sel: '#experience', cap: 'Experience — four roles, each under real production constraints.' },
-      { sel: '#resume',     cap: 'The CV, four ways — grab the version that matches your role.' },
-      { sel: '#contact',    cap: "Like what you see? Fastest path is email — let's talk." }
-    ],
-
-    contactEmail: 'kadri.mourad@esprit.tn'
+    /* curated highlights reel — the real "best bits" */
+    reel: [
+      {
+        kicker: 'Banque de Tunisie et des Émirats · production',
+        title: 'An autonomous voice agent that collects debt',
+        blurb: 'Calls debtors, authenticates them, negotiates payment and closes the loop — entirely on-premises, no human in the seat.',
+        metrics: ['1.05 s end-to-end', '98.1% intent F1', '39 intents', 'on-prem'],
+        href: '#/project/bte-voice-agent'
+      },
+      {
+        kicker: 'Exaq · document intelligence',
+        title: 'OCR that erases manual data entry',
+        blurb: 'A YOLOv13 + TrOCR pipeline that reads real-world forms and hands structured fields straight to the ERP.',
+        metrics: ['97% field accuracy', '−85% entry time', 'YOLOv13 + TrOCR'],
+        href: '#/project/exaq-ocr'
+      },
+      {
+        kicker: 'Breadth · shipped, not shelved',
+        title: '11 projects across the ML stack',
+        blurb: 'RAG systems, an MLOps pipeline, and GooseJobs — a SaaS side project running in the wild.',
+        metrics: ['11 projects', 'RAG · MLOps', 'GooseJobs SaaS'],
+        href: '#/project/goosejobs'
+      },
+      {
+        kicker: 'The numbers, in one place',
+        title: 'Impact at a glance',
+        blurb: 'Every claim here is backed by a shipped system. Grab the CV or reach out — I reply fast.',
+        metrics: ['1.05 s', '98.1%', '97%', '11 projects'],
+        href: '#resume',
+        cta: 'See the CV →'
+      }
+    ]
   };
 
   /* -------------------------------------------------------------------------- */
@@ -71,6 +81,7 @@
   function clean(s) { return (s || '').replace(/[<>"'`]/g, '').trim().slice(0, 60); }
   function slug(s)  { return clean(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
   function ss(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); sessionStorage.setItem(k, v); } catch (e) {} }
+  function esc(s)   { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
   function el(tag, attrs, html) {
     var n = document.createElement(tag);
     if (attrs) for (var k in attrs) { if (k === 'style') n.style.cssText = attrs[k]; else n.setAttribute(k, attrs[k]); }
@@ -78,14 +89,28 @@
     return n;
   }
 
+  /* Availability text, computed from today's date so it never goes stale. */
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function availabilityText() {
+    var m = /^(\d{4})-(\d{2})$/.exec(CFG.availableFrom || '');
+    var lead = 'Available now';
+    if (m) {
+      var target = new Date(+m[1], +m[2] - 1, 1);
+      var now = new Date(), cur = new Date(now.getFullYear(), now.getMonth(), 1);
+      if (cur < target) lead = 'Available ' + MONTHS[+m[2] - 1] + ' ' + m[1];
+    }
+    return CFG.availabilitySuffix ? (lead + ' · ' + CFG.availabilitySuffix) : lead;
+  }
+
   var params = new URLSearchParams(location.search);
   var P = {
     to:   clean(params.get('to')),
     via:  clean(params.get('via')),
-    role: (function () { var r = slug(params.get('role')); return CFG.roleHeadline[r] ? r : (CFG.roleFit[r] ? r : ''); })()
+    role: (function () { var r = slug(params.get('role')); return CFG.roleHeadline[r] ? r : ''; })()
   };
   var CVKEY = P.role && CFG.roleCV[P.role];
   var CVHREF = (CVKEY && window.__resources && window.__resources[CVKEY]) || null;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* -------------------------------------------------------------------------- */
   /* styles                                                                     */
@@ -94,69 +119,56 @@
     if (document.getElementById('mk-enhance-style')) return;
     var s = el('style', { id: 'mk-enhance-style' });
     s.textContent = [
-      /* greeting toast */
-      '#mk-greet{position:fixed;top:72px;left:50%;transform:translateX(-50%) translateY(-14px);z-index:38;max-width:min(92vw,560px);opacity:0;pointer-events:none;',
-      'display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--panel);border:1px solid var(--hair);border-radius:4px;box-shadow:0 10px 40px rgba(0,0,0,0.16);transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1)}',
-      '#mk-greet.mk-in{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}',
-      '#mk-greet .mk-g-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;box-shadow:0 0 0 4px var(--accent-soft)}',
-      '#mk-greet .mk-g-txt{font-size:13.5px;line-height:1.4;color:var(--body);min-width:0}',
-      '#mk-greet .mk-g-txt b{font-family:"Instrument Serif",serif;font-weight:400;font-size:18px;color:var(--ink);letter-spacing:-.01em}',
-      '#mk-greet .mk-g-cta{flex-shrink:0;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--accent);border:none;border-radius:2px;padding:8px 12px;cursor:pointer;white-space:nowrap}',
-      '#mk-greet .mk-g-x{flex-shrink:0;background:none;border:none;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;padding:2px 4px}',
       /* availability pill (injected into hero eyebrow) */
       '#mk-avail{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid var(--hair);border-radius:100px;background:var(--soft);font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.04em;text-transform:none;color:var(--body);white-space:nowrap}',
       '#mk-avail .mk-live{width:7px;height:7px;border-radius:50%;background:#2ec26b;box-shadow:0 0 0 0 rgba(46,194,107,.5);animation:mkPulse 2s infinite}',
       '@keyframes mkPulse{0%{box-shadow:0 0 0 0 rgba(46,194,107,.5)}70%{box-shadow:0 0 0 7px rgba(46,194,107,0)}100%{box-shadow:0 0 0 0 rgba(46,194,107,0)}}',
-      /* hero tour button */
-      '#mk-tour-btn{display:inline-flex;align-items:center;gap:9px;padding:14px 20px;border:1px dashed var(--accent);color:var(--accent);background:var(--accent-soft);font-size:14px;font-weight:500;border-radius:2px;cursor:pointer;font-family:inherit}',
-      '#mk-tour-btn:hover{background:var(--accent);color:#fff;border-style:solid}',
-      /* recruiter tab */
-      '#mk-rtab{position:fixed;top:76px;right:16px;z-index:37;display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:var(--ink);color:var(--bg);border:none;border-radius:100px;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,.18)}',
-      '#mk-rtab:hover{background:var(--accent);color:#fff}',
-      '@media(max-width:820px){#mk-rtab{display:none}}',
-      /* TL;DR drawer */
-      '#mk-scrim{position:fixed;inset:0;z-index:69;background:rgba(10,10,8,.42);opacity:0;pointer-events:none;transition:opacity .3s}',
-      '#mk-scrim.mk-in{opacity:1;pointer-events:auto}',
-      '#mk-tldr{position:fixed;top:0;right:0;bottom:0;z-index:70;width:min(430px,92vw);background:var(--bg);border-left:1px solid var(--hair);transform:translateX(102%);transition:transform .38s cubic-bezier(.2,.7,.2,1);overflow-y:auto;padding:26px 26px 40px}',
-      '#mk-tldr.mk-in{transform:translateX(0)}',
-      '#mk-tldr .mk-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px}',
-      '#mk-tldr h4{font-family:"Instrument Serif",serif;font-weight:400;font-size:28px;letter-spacing:-.02em;margin:0;color:var(--ink)}',
-      '#mk-tldr .mk-close{background:none;border:none;color:var(--muted);font-size:22px;line-height:1;cursor:pointer}',
-      '#mk-tldr .mk-fit{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin:0 0 18px}',
-      '#mk-tldr .mk-sec{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}',
-      '#mk-tldr ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}',
-      '#mk-tldr li{display:flex;gap:10px;font-size:13.5px;line-height:1.5;color:var(--body)}',
-      '#mk-tldr li::before{content:"→";color:var(--accent);flex-shrink:0}',
-      '#mk-tldr .mk-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}',
-      '#mk-tldr .mk-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 16px;font-size:13px;font-weight:500;border-radius:2px;cursor:pointer;text-decoration:none;border:1px solid var(--hair);color:var(--ink);background:var(--panel);font-family:inherit}',
-      '#mk-tldr .mk-btn.mk-primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}',
-      '#mk-tldr .mk-btn:hover{border-color:var(--accent)}',
-      '#mk-tldr .mk-avpill{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--body);background:var(--soft);border:1px solid var(--hair);border-radius:4px;padding:10px 12px}',
-      /* tour overlay */
-      '#mk-tour{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);z-index:72;opacity:0;pointer-events:none;max-width:min(94vw,540px);',
-      'display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--ink);color:var(--bg);border-radius:6px;box-shadow:0 14px 50px rgba(0,0,0,.3);transition:opacity .35s,transform .35s}',
-      '#mk-tour.mk-in{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}',
-      '#mk-tour .mk-t-n{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;opacity:.6;flex-shrink:0}',
-      '#mk-tour .mk-t-cap{font-size:14px;line-height:1.4;flex:1}',
-      '#mk-tour button{flex-shrink:0;font-family:"IBM Plex Mono",monospace;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border:1px solid rgba(255,255,255,.3);background:transparent;color:var(--bg);border-radius:2px;padding:7px 11px;cursor:pointer}',
-      '#mk-tour button.mk-t-next{background:var(--accent);border-color:var(--accent);color:#fff}',
-      '#mk-tour button.mk-t-x{border:none;font-size:15px;padding:6px 8px}',
-      '.mk-tour-focus{outline:2px solid var(--accent);outline-offset:6px;transition:outline .3s;scroll-margin-top:90px}',
-      /* link builder */
-      '#mk-links{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(10,10,8,.5);padding:20px}',
-      '#mk-links.mk-in{display:flex}',
-      '#mk-links .mk-card{width:min(440px,94vw);background:var(--bg);border:1px solid var(--hair);border-radius:6px;padding:24px}',
-      '#mk-links h4{font-family:"Instrument Serif",serif;font-weight:400;font-size:24px;margin:0 0 4px;color:var(--ink)}',
-      '#mk-links p{font-size:12.5px;color:var(--muted);margin:0 0 16px}',
-      '#mk-links label{display:block;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:12px 0 5px}',
-      '#mk-links input,#mk-links select{width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--hair);background:var(--panel);color:var(--ink);border-radius:2px;font:inherit;font-size:13px}',
-      '#mk-links .mk-out{margin-top:16px;padding:10px;background:var(--soft);border:1px dashed var(--hair);border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;word-break:break-all;color:var(--accent)}',
-      '#mk-links .mk-row{display:flex;gap:10px;margin-top:14px}',
-      '#mk-links .mk-btn{flex:1;text-align:center;padding:11px;border-radius:2px;cursor:pointer;font-size:12.5px;border:1px solid var(--hair);background:var(--panel);color:var(--ink)}',
-      '#mk-links .mk-btn.mk-primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}',
-      '[dir="rtl"] #mk-tldr{right:auto;left:0;border-left:none;border-right:1px solid var(--hair);transform:translateX(-102%)}',
-      '[dir="rtl"] #mk-tldr.mk-in{transform:translateX(0)}',
-      '[dir="rtl"] #mk-rtab{right:auto;left:16px}'
+      /* hero "best bits" button */
+      '#mk-reel-btn{display:inline-flex;align-items:center;gap:9px;padding:14px 20px;min-height:44px;border:1px dashed var(--accent);color:var(--accent);background:var(--accent-soft);font-size:14px;font-weight:500;border-radius:2px;cursor:pointer;font-family:inherit;transition:background .2s ease,color .2s ease,border-color .2s ease}',
+      '#mk-reel-btn:hover{background:var(--accent);color:#fff;border-style:solid}',
+      '#mk-reel-btn .mk-spark{transition:transform .4s cubic-bezier(.2,.7,.2,1)}',
+      '#mk-reel-btn:hover .mk-spark{transform:rotate(90deg) scale(1.15)}',
+      /* reel overlay */
+      '#mk-reel{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(10,10,8,.62);opacity:0;transition:opacity .32s ease}',
+      '#mk-reel.mk-in{display:flex;opacity:1}',
+      '#mk-reel .mk-card{position:relative;width:min(560px,96vw);max-height:92vh;overflow-y:auto;background:var(--bg);border:1px solid var(--hair);border-radius:8px;box-shadow:0 24px 80px rgba(0,0,0,.42);padding:30px 30px 24px;transform:translateY(14px) scale(.985);transition:transform .32s cubic-bezier(.2,.7,.2,1)}',
+      '#mk-reel.mk-in .mk-card{transform:none}',
+      '#mk-reel .mk-x{position:absolute;top:12px;right:12px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:none;border:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;border-radius:2px}',
+      '#mk-reel .mk-x:hover{color:var(--ink);background:var(--soft)}',
+      '#mk-reel .mk-kick{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 40px 12px 0}',
+      '#mk-reel h4{font-family:"Instrument Serif",serif;font-weight:400;font-size:clamp(26px,4.4vw,34px);line-height:1.05;letter-spacing:-.02em;margin:0 0 12px;color:var(--ink)}',
+      '#mk-reel .mk-blurb{font-size:14.5px;line-height:1.6;color:var(--body);margin:0 0 18px}',
+      '#mk-reel .mk-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 22px}',
+      '#mk-reel .mk-chip{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.03em;color:var(--ink);background:var(--soft);border:1px solid var(--hair);border-radius:100px;padding:6px 11px;opacity:0;transform:translateY(6px);animation:mkChip .4s ease forwards}',
+      '@keyframes mkChip{to{opacity:1;transform:none}}',
+      '#mk-reel .mk-foot{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:16px}',
+      '#mk-reel .mk-see{display:inline-flex;align-items:center;gap:8px;padding:11px 16px;min-height:44px;background:var(--ink);color:var(--bg);border:1px solid var(--ink);font-size:13px;font-weight:500;border-radius:2px;text-decoration:none;cursor:pointer}',
+      '#mk-reel .mk-see:hover{background:var(--accent);border-color:var(--accent);color:#fff}',
+      '#mk-reel .mk-nav{margin-left:auto;display:flex;align-items:center;gap:8px}',
+      '#mk-reel .mk-arrow{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--hair);background:var(--panel);color:var(--ink);font-size:15px;cursor:pointer;border-radius:2px}',
+      '#mk-reel .mk-arrow:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}',
+      '#mk-reel .mk-arrow:disabled{opacity:.35;cursor:default}',
+      '#mk-reel .mk-dots{display:flex;gap:7px;margin:16px 0 2px;justify-content:center}',
+      '#mk-reel .mk-dot{width:8px;height:8px;padding:0;border-radius:50%;border:1px solid var(--hair);background:transparent;cursor:pointer;transition:background .2s,border-color .2s,transform .2s}',
+      '#mk-reel .mk-dot.on{background:var(--accent);border-color:var(--accent);transform:scale(1.25)}',
+      '@media (prefers-reduced-motion: reduce){#mk-reel,#mk-reel .mk-card{transition:none}#mk-reel .mk-chip{animation:none;opacity:1;transform:none}}',
+      '@media (max-width:520px){#mk-reel .mk-card{padding:26px 20px 20px}#mk-reel .mk-foot{gap:10px}#mk-reel .mk-see{flex:1;justify-content:center}#mk-reel .mk-nav{margin-left:0;width:100%;justify-content:flex-end}}',
+
+      /* --- scroll progress bar (JS-driven scaleX) --- */
+      '#mk-scrollbar{position:fixed;top:0;left:0;right:0;height:3px;z-index:85;transform:scaleX(0);transform-origin:0 50%;background:linear-gradient(90deg,var(--accent),var(--warm,var(--accent)));box-shadow:0 0 8px var(--accent-soft);will-change:transform;pointer-events:none}',
+
+      /* --- scroll-driven reveals (CSS view-timeline; degrades to no-op) ---------
+         Uses the independent `translate` property so element `transform` (hover
+         lift on work cards) is never overridden by the finished animation. */
+      '@keyframes mkReveal{from{opacity:0;translate:0 30px}to{opacity:1;translate:0 0}}',
+      '@keyframes mkRevealSm{from{opacity:0;translate:0 18px}to{opacity:1;translate:0 0}}',
+      '@keyframes mkZoom{from{opacity:0;scale:.965}to{opacity:1;scale:1}}',
+      '@supports (animation-timeline: view()){@media (prefers-reduced-motion: no-preference){',
+        '[data-r="wcard"]{animation:mkReveal linear both;animation-timeline:view();animation-range:entry 2% cover 22%}',
+        '[data-r="wrap"] section > div:first-child h2{animation:mkRevealSm linear both;animation-timeline:view();animation-range:entry 0% entry 60%}',
+        'image-slot:not(#hero-portrait){animation:mkZoom linear both;animation-timeline:view();animation-range:entry 4% cover 20%}',
+        '[data-r="pstats"] > *,[data-r="edu"] > *{animation:mkRevealSm linear both;animation-timeline:view();animation-range:entry 2% entry 65%}',
+      '}}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -250,177 +262,148 @@
   }
 
   /* -------------------------------------------------------------------------- */
-  /* 3. greeting banner (only with ?to=)                                        */
+  /* 3. curated "best bits" highlights reel (body-level; re-render immune)       */
   /* -------------------------------------------------------------------------- */
-  function initGreeting() {
-    if (!P.to || ss('mk_greet_x') || document.getElementById('mk-greet')) return;
-    var viaPart = P.via ? (' — thanks for coming via ' + P.via) : '';
-    var g = el('div', { id: 'mk-greet' },
-      '<span class="mk-g-dot"></span>' +
-      '<span class="mk-g-txt">Hi <b>' + P.to + '</b>' + viaPart +
-        '. Here’s the work most relevant to you.</span>' +
-      '<button class="mk-g-cta">30-sec brief →</button>' +
-      '<button class="mk-g-x" aria-label="Dismiss">×</button>');
-    document.body.appendChild(g);
-    g.querySelector('.mk-g-cta').addEventListener('click', openTLDR);
-    g.querySelector('.mk-g-x').addEventListener('click', function () {
-      ss('mk_greet_x', '1'); g.classList.remove('mk-in');
-      setTimeout(function () { g.remove(); }, 500);
-    });
-    setTimeout(function () { g.classList.add('mk-in'); }, 450);
-  }
+  var reelIdx = 0, reelEl = null, lastFocus = null, touchX = null;
 
-  /* -------------------------------------------------------------------------- */
-  /* 4. recruiter tab + TL;DR drawer                                            */
-  /* -------------------------------------------------------------------------- */
-  function buildTLDR() {
-    if (document.getElementById('mk-tldr')) return;
-    var scrim = el('div', { id: 'mk-scrim' });
-    var d = el('div', { id: 'mk-tldr', role: 'dialog', 'aria-label': 'Recruiter summary' });
-    var cvHref = CVHREF || '#resume';
-    var winsHtml = CFG.wins.map(function (w) { return '<li>' + w + '</li>'; }).join('');
-    d.innerHTML =
-      '<div class="mk-h"><h4>The 30-second brief</h4><button class="mk-close" aria-label="Close">×</button></div>' +
-      '<p class="mk-fit">' + (CFG.roleFit[P.role] || CFG.roleFit['']) + '</p>' +
-      '<div class="mk-avpill"><span style="width:7px;height:7px;border-radius:50%;background:#2ec26b;flex-shrink:0"></span>' + CFG.availability + '</div>' +
-      '<div class="mk-sec">Three things worth knowing</div>' +
-      '<ul>' + winsHtml + '</ul>' +
-      '<div class="mk-sec">Next step</div>' +
-      '<div class="mk-row">' +
-        '<a class="mk-btn mk-primary" href="' + cvHref + '"' + (CVHREF ? ' download' : '') + '>Download CV ↓</a>' +
-        '<a class="mk-btn" href="mailto:' + CFG.contactEmail + '">Email me</a>' +
-        '<button class="mk-btn" id="mk-tldr-tour">Show me the best bits</button>' +
+  function buildReel() {
+    if (reelEl) return reelEl;
+    reelEl = el('div', { id: 'mk-reel', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Highlights' });
+    reelEl.innerHTML =
+      '<div class="mk-card" tabindex="-1">' +
+        '<button class="mk-x" aria-label="Close">×</button>' +
+        '<p class="mk-kick"></p>' +
+        '<h4></h4>' +
+        '<p class="mk-blurb"></p>' +
+        '<div class="mk-chips"></div>' +
+        '<div class="mk-foot">' +
+          '<a class="mk-see" href="#"></a>' +
+          '<div class="mk-nav">' +
+            '<button class="mk-arrow mk-prev" aria-label="Previous">←</button>' +
+            '<button class="mk-arrow mk-next" aria-label="Next">→</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="mk-dots" role="tablist"></div>' +
       '</div>';
-    document.body.appendChild(scrim);
-    document.body.appendChild(d);
-    scrim.addEventListener('click', closeTLDR);
-    d.querySelector('.mk-close').addEventListener('click', closeTLDR);
-    d.querySelector('#mk-tldr-tour').addEventListener('click', function () { closeTLDR(); startTour(); });
-  }
-  function openTLDR() { buildTLDR(); document.getElementById('mk-scrim').classList.add('mk-in'); document.getElementById('mk-tldr').classList.add('mk-in'); }
-  function closeTLDR() {
-    var s = document.getElementById('mk-scrim'), d = document.getElementById('mk-tldr');
-    if (s) s.classList.remove('mk-in'); if (d) d.classList.remove('mk-in');
-  }
-  function initRTab() {
-    if (document.getElementById('mk-rtab')) return;
-    var b = el('button', { id: 'mk-rtab' }, '✦ Recruiter view');
-    b.addEventListener('click', openTLDR);
-    document.body.appendChild(b);
-  }
+    document.body.appendChild(reelEl);
 
-  /* -------------------------------------------------------------------------- */
-  /* 5. guided highlights tour                                                  */
-  /* -------------------------------------------------------------------------- */
-  var tourIdx = -1, tourEl = null, lastFocus = null;
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function tourGo(i) {
-    if (i < 0 || i >= CFG.tour.length) return endTour();
-    if (lastFocus) lastFocus.classList.remove('mk-tour-focus');
-    tourIdx = i;
-    var step = CFG.tour[i], target = document.querySelector(step.sel);
-    if (target) {
-      if (target.scrollIntoView) target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-      target.classList.add('mk-tour-focus'); lastFocus = target;
-    }
-    tourEl.querySelector('.mk-t-n').textContent = (i + 1) + ' / ' + CFG.tour.length;
-    tourEl.querySelector('.mk-t-cap').textContent = step.cap;
-    tourEl.querySelector('.mk-t-next').textContent = (i === CFG.tour.length - 1) ? 'Done' : 'Next →';
-  }
-  function startTour() {
-    if (!tourEl) {
-      tourEl = el('div', { id: 'mk-tour' },
-        '<span class="mk-t-n"></span><span class="mk-t-cap"></span>' +
-        '<button class="mk-t-prev">←</button>' +
-        '<button class="mk-t-next">Next →</button>' +
-        '<button class="mk-t-x" aria-label="End tour">×</button>');
-      document.body.appendChild(tourEl);
-      tourEl.querySelector('.mk-t-prev').addEventListener('click', function () { tourGo(tourIdx - 1); });
-      tourEl.querySelector('.mk-t-next').addEventListener('click', function () { tourGo(tourIdx + 1); });
-      tourEl.querySelector('.mk-t-x').addEventListener('click', endTour);
-    }
-    tourEl.classList.add('mk-in');
-    tourGo(0);
-  }
-  function endTour() {
-    if (lastFocus) { lastFocus.classList.remove('mk-tour-focus'); lastFocus = null; }
-    if (tourEl) tourEl.classList.remove('mk-in');
-    tourIdx = -1;
-  }
-
-  /* -------------------------------------------------------------------------- */
-  /* 6. link builder (#/links) — private helper for building tracking URLs      */
-  /* -------------------------------------------------------------------------- */
-  function buildLinks() {
-    if (document.getElementById('mk-links')) return;
-    var m = el('div', { id: 'mk-links' });
-    m.innerHTML =
-      '<div class="mk-card">' +
-        '<h4>Tracking-link builder</h4>' +
-        '<p>Send each recruiter a unique link for a personal greeting + attribution.</p>' +
-        '<label>Company / person</label><input id="mk-l-to" placeholder="Google">' +
-        '<label>Channel</label><input id="mk-l-via" placeholder="linkedin">' +
-        '<label>Role framing</label>' +
-        '<select id="mk-l-role"><option value="">— none —</option><option value="ml">ML Engineer</option>' +
-          '<option value="ds">Data Science</option><option value="fs">Full-stack</option><option value="auto">AI Automation</option></select>' +
-        '<div class="mk-out" id="mk-l-out"></div>' +
-        '<div class="mk-row"><button class="mk-btn mk-primary" id="mk-l-copy">Copy link</button>' +
-          '<button class="mk-btn" id="mk-l-close">Close</button></div>' +
-      '</div>';
-    document.body.appendChild(m);
-    var to = m.querySelector('#mk-l-to'), via = m.querySelector('#mk-l-via'),
-        role = m.querySelector('#mk-l-role'), out = m.querySelector('#mk-l-out');
-    function rebuild() {
-      var base = location.origin + location.pathname;
-      var qs = [];
-      if (to.value.trim()) qs.push('to=' + encodeURIComponent(to.value.trim()));
-      if (via.value.trim()) qs.push('via=' + encodeURIComponent(via.value.trim()));
-      if (role.value) qs.push('role=' + role.value);
-      out.textContent = base + (qs.length ? '?' + qs.join('&') : '') + '#/';
-    }
-    [to, via].forEach(function (i) { i.addEventListener('input', rebuild); });
-    role.addEventListener('change', rebuild);
-    m.querySelector('#mk-l-copy').addEventListener('click', function () {
-      try { navigator.clipboard.writeText(out.textContent); this.textContent = 'Copied ✓'; var b = this; setTimeout(function () { b.textContent = 'Copy link'; }, 1400); } catch (e) {}
+    reelEl.addEventListener('click', function (e) { if (e.target === reelEl) closeReel(); });
+    reelEl.querySelector('.mk-x').addEventListener('click', closeReel);
+    reelEl.querySelector('.mk-prev').addEventListener('click', function () { reelGo(reelIdx - 1); });
+    reelEl.querySelector('.mk-next').addEventListener('click', function () { reelGo(reelIdx + 1); });
+    reelEl.querySelector('.mk-see').addEventListener('click', function () {
+      // let the browser follow the hash link, but close the overlay first
+      closeReel();
     });
-    m.querySelector('#mk-l-close').addEventListener('click', function () { location.hash = '#/'; });
-    rebuild();
+
+    // swipe on touch devices
+    var card = reelEl.querySelector('.mk-card');
+    card.addEventListener('touchstart', function (e) { touchX = e.touches[0].clientX; }, { passive: true });
+    card.addEventListener('touchend', function (e) {
+      if (touchX == null) return;
+      var dx = e.changedTouches[0].clientX - touchX; touchX = null;
+      if (Math.abs(dx) > 45) reelGo(reelIdx + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+
+    return reelEl;
   }
-  function syncLinksRoute() {
-    var open = location.hash.indexOf('#/links') === 0;
-    if (open) buildLinks();
-    var m = document.getElementById('mk-links');
-    if (m) m.classList.toggle('mk-in', open);
+
+  function reelGo(i) {
+    var reel = CFG.reel;
+    if (i < 0) i = 0; if (i >= reel.length) i = reel.length - 1;
+    reelIdx = i;
+    var it = reel[i];
+    reelEl.querySelector('.mk-kick').textContent = it.kicker || '';
+    reelEl.querySelector('h4').textContent = it.title || '';
+    reelEl.querySelector('.mk-blurb').textContent = it.blurb || '';
+    var chips = reelEl.querySelector('.mk-chips');
+    chips.innerHTML = (it.metrics || []).map(function (m, k) {
+      return '<span class="mk-chip" style="animation-delay:' + (reduce ? 0 : k * 55) + 'ms">' + esc(m) + '</span>';
+    }).join('');
+    var see = reelEl.querySelector('.mk-see');
+    var href = it.href || '#';
+    // role-specific CV download when the slide points at the resume section
+    if (it.href === '#resume' && CVHREF) { href = CVHREF; see.setAttribute('download', ''); }
+    else { see.removeAttribute('download'); }
+    see.setAttribute('href', href);
+    see.textContent = it.cta || 'See project →';
+    reelEl.querySelector('.mk-prev').disabled = (i === 0);
+    reelEl.querySelector('.mk-next').disabled = (i === reel.length - 1);
+    // dots
+    var dots = reelEl.querySelector('.mk-dots');
+    dots.innerHTML = reel.map(function (_, k) {
+      return '<button class="mk-dot' + (k === i ? ' on' : '') + '" role="tab" aria-label="Highlight ' + (k + 1) + '" data-k="' + k + '"></button>';
+    }).join('');
+    Array.prototype.forEach.call(dots.querySelectorAll('.mk-dot'), function (d) {
+      d.addEventListener('click', function () { reelGo(+d.getAttribute('data-k')); });
+    });
+  }
+
+  function openReel() {
+    buildReel();
+    lastFocus = document.activeElement;
+    reelIdx = 0; reelGo(0);
+    reelEl.classList.add('mk-in');
+    setTimeout(function () { var c = reelEl.querySelector('.mk-card'); if (c) c.focus(); }, 40);
+  }
+  function closeReel() {
+    if (!reelEl) return;
+    reelEl.classList.remove('mk-in');
+    if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} }
+    lastFocus = null;
+  }
+  function reelOpen() { return reelEl && reelEl.classList.contains('mk-in'); }
+
+  /* -------------------------------------------------------------------------- */
+  /* 4. scroll progress bar (body-level, rAF-throttled, re-render immune)        */
+  /* -------------------------------------------------------------------------- */
+  function initScrollBar() {
+    var bar = document.getElementById('mk-scrollbar');
+    if (!bar) { bar = el('div', { id: 'mk-scrollbar', 'aria-hidden': 'true' }); document.body.appendChild(bar); }
+    var ticking = false;
+    function paint() {
+      ticking = false;
+      var h = document.documentElement;
+      var max = h.scrollHeight - h.clientHeight;
+      var p = max > 0 ? Math.min(1, Math.max(0, h.scrollTop / max)) : 0;
+      bar.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+    }
+    function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(paint); } }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    paint();
   }
 
   /* -------------------------------------------------------------------------- */
-  /* 7. in-flow tweaks re-applied on every render (availability, role, tour btn)*/
+  /* 5. in-flow tweaks re-applied on every render (availability, role, button)  */
   /* -------------------------------------------------------------------------- */
   function enhanceFramework() {
     var h1 = document.querySelector('[data-r="hero"] h1');
     if (!h1) return; // not on home
 
+    var avail = availabilityText();
+
     // availability pill in the hero eyebrow
     var eyebrow = h1.previousElementSibling;
     if (eyebrow && !eyebrow.querySelector('#mk-avail')) {
-      eyebrow.appendChild(el('span', { id: 'mk-avail' },
-        '<span class="mk-live"></span>' + CFG.availability));
+      eyebrow.appendChild(el('span', { id: 'mk-avail' }, '<span class="mk-live"></span>' + esc(avail)));
     }
 
-    // role headline reframe
+    // role headline reframe (only with ?role=)
     if (P.role && CFG.roleHeadline[P.role] && h1.getAttribute('data-mk-role') !== P.role) {
       h1.innerHTML = CFG.roleHeadline[P.role].replace('<em>', '<em style="font-style:italic;color:var(--accent)">');
       h1.setAttribute('data-mk-role', P.role);
     }
 
-    // CTA row: tour button + role-specific CV target (anchored to the hero's "See the work" link)
+    // CTA row: "best bits" button + role-specific CV target
     var seeWork = h1.parentElement && h1.parentElement.querySelector('a[href="#work"]');
     var ctaRow = seeWork && seeWork.parentElement;
     if (ctaRow) {
-      if (!ctaRow.querySelector('#mk-tour-btn')) {
-        var tb = el('button', { id: 'mk-tour-btn', type: 'button' }, '✦ Show me the best bits');
-        tb.addEventListener('click', startTour);
-        ctaRow.appendChild(tb);
+      if (!ctaRow.querySelector('#mk-reel-btn')) {
+        // No per-node listener: a delegated document handler (see boot) owns the click,
+        // so the button keeps working even as the framework re-renders this subtree.
+        ctaRow.appendChild(el('button', { id: 'mk-reel-btn', type: 'button' },
+          '<span class="mk-spark" aria-hidden="true">✦</span> Show me the best bits'));
       }
       if (CVHREF) {
         var cvLink = ctaRow.querySelector('a[href="#resume"]');
@@ -455,9 +438,7 @@
     injectStyle();
     initAnalytics();
     initNotify();
-    initGreeting();
-    initRTab();
-    syncLinksRoute();
+    initScrollBar();
 
     // keep in-flow tweaks alive across app re-renders (debounced, idempotent)
     var pending = false;
@@ -465,8 +446,21 @@
     enhanceFramework();
     new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
 
-    window.addEventListener('hashchange', function () { syncLinksRoute(); schedule(); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeTLDR(); endTour(); } });
+    window.addEventListener('hashchange', schedule);
+
+    // delegated click: survives every hero re-render (the old per-node listener didn't)
+    document.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.closest && t.closest('#mk-reel-btn')) { e.preventDefault(); openReel(); }
+    });
+
+    // keyboard: Esc closes, arrows navigate while the reel is open
+    document.addEventListener('keydown', function (e) {
+      if (!reelOpen()) return;
+      if (e.key === 'Escape') closeReel();
+      else if (e.key === 'ArrowRight') reelGo(reelIdx + 1);
+      else if (e.key === 'ArrowLeft') reelGo(reelIdx - 1);
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
